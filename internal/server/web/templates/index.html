@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cron Microservice</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Cron Microservice</h1>
+            <button id="theme-toggle" onclick="toggleTheme()">🌙</button>
+        </header>
+
+        <main>
+            <section class="job-list">
+                <div class="section-header">
+                    <h2>Cron Jobs</h2>
+                    <button class="btn btn-primary" onclick="showAddJobModal()">Add Job</button>
+                </div>
+                
+                <div id="jobs-container">
+                    {{range .}}
+                    <div class="job-card" id="job-{{.ID}}">
+                        <div class="job-header">
+                            <h3>{{.Name}}</h3>
+                            <div class="job-actions">
+                                <button class="btn btn-small btn-secondary" onclick="testJob('{{.ID}}')">Test Now</button>
+                                <button class="btn btn-small" onclick="editJob('{{.ID}}')">Edit</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteJob('{{.ID}}')">Delete</button>
+                            </div>
+                        </div>
+                        
+                        <div class="job-details">
+                            <p><strong>Schedule:</strong> <code>{{.Schedule}}</code></p>
+                            <p><strong>Status:</strong> <span class="status {{if .Enabled}}enabled{{else}}disabled{{end}}">{{if .Enabled}}Enabled{{else}}Disabled{{end}}</span></p>
+                            <p><strong>Primary Webhook:</strong> {{.Primary.Method}} {{.Primary.URL}}</p>
+                            {{if .Secondary}}<p><strong>Secondary Webhook:</strong> {{.Secondary.Method}} {{.Secondary.URL}}</p>{{end}}
+                            {{if .Description}}<p><strong>Description:</strong> {{.Description}}</p>{{end}}
+                        </div>
+                    </div>
+                    {{else}}
+                    <p class="no-jobs">No cron jobs configured. Add your first job to get started!</p>
+                    {{end}}
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add/Edit Job Modal -->
+    <div id="job-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add Cron Job</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <form id="job-form" onsubmit="saveJob(event)">
+                <input type="hidden" id="job-id">
+                
+                <div class="form-group">
+                    <label for="job-name">Job Name *</label>
+                    <input type="text" id="job-name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="job-schedule">Schedule (cron format) *</label>
+                    <input type="text" id="job-schedule" placeholder="* * * * *" required>
+                    <small>Minute Hour Day Month Weekday</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="job-description">Description</label>
+                    <textarea id="job-description" rows="2"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="job-enabled" checked>
+                        Enabled
+                    </label>
+                </div>
+
+                <h3>Primary Webhook</h3>
+                <div class="form-group">
+                    <label for="primary-url">URL *</label>
+                    <input type="url" id="primary-url" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="primary-bearer-token">Bearer Token</label>
+                    <input type="password" id="primary-bearer-token" placeholder="Optional: Bearer token for authentication">
+                </div>
+
+                <div class="form-group">
+                    <label for="primary-method">Method *</label>
+                    <select id="primary-method" required>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="primary-headers">Headers (JSON)</label>
+                    <textarea id="primary-headers" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="primary-body">Body</label>
+                    <textarea id="primary-body" rows="4"></textarea>
+                </div>
+
+                <h3>Secondary Webhook (Optional)</h3>
+                <div class="form-group">
+                    <label for="secondary-url">URL</label>
+                    <input type="url" id="secondary-url">
+                </div>
+
+                <div class="form-group">
+                    <label for="secondary-bearer-token">Bearer Token</label>
+                    <input type="password" id="secondary-bearer-token" placeholder="Optional: Bearer token for authentication">
+                </div>
+
+                <div class="form-group">
+                    <label for="secondary-method">Method</label>
+                    <select id="secondary-method">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="secondary-headers">Headers (JSON)</label>
+                    <textarea id="secondary-headers" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="secondary-jq-selectors">JQ Selectors (JSON) <span class="help-icon" title="Extract data from primary webhook response using jq selectors">ℹ️</span></label>
+                    <textarea id="secondary-jq-selectors" rows="4" placeholder='{
+  "userId": ".user.id",
+  "status": ".status",
+  "name": ".data.name"
+}'></textarea>
+                    <div class="help-box">
+                        <strong>Examples:</strong><br>
+                        • <code>{"id": ".id"}</code> - extracts top-level id field<br>
+                        • <code>{"userId": ".user.id"}</code> - extracts nested user.id<br>
+                        • <code>{"firstItem": ".items[0].name"}</code> - extracts from array<br>
+                        • <code>{"active": ".users[] | select(.active) | .name"}</code> - filters array<br>
+                        Use extracted variables as <code>{{"{{"}}variableName{{"}}"}}</code> in the template below.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="secondary-body-template">Body Template <span class="help-icon" title="Template for secondary webhook body using extracted variables">ℹ️</span></label>
+                    <textarea id="secondary-body-template" rows="4" placeholder='{
+  "userId": "{{"{{"}}userId{{"}}"}}",
+  "status": "{{"{{"}}status{{"}}"}}",
+  "processed": true,
+  "timestamp": "2025-11-25"
+}'></textarea>
+                    <div class="help-box">
+                        <strong>Template Examples:</strong><br>
+                        • <code>{"id": "{{"{{"}}userId{{"}}"}}", "status": "{{"{{"}}status{{"}}"}}"}</code> - uses extracted variables<br>
+                        • <code>{"data": {{"{{"}}original{{"}}"}}, "processed": true}</code> - wraps original response<br>
+                        Leave empty to send raw primary webhook response unchanged.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="save-output">
+                        Save output from primary webhook and send to secondary
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="only-if-vars-non-empty">
+                        Only run second webhook if variables resolve to non-empty strings
+                    </label>
+                    <div class="help-box">
+                        <strong>Conditional Execution:</strong><br>
+                        When checked, the secondary webhook will only execute if all extracted jq variables contain non-empty values. Useful for ensuring required data is present before proceeding.
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
