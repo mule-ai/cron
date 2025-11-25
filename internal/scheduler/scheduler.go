@@ -133,7 +133,7 @@ func (s *Scheduler) executeJob(job config.CronJob) {
 
 				// Extract variables using jq selectors if configured
 				var variables map[string]interface{}
-				if job.Secondary.JQSelectors != nil && len(job.Secondary.JQSelectors) > 0 {
+				if len(job.Secondary.JQSelectors) > 0 {
 					s.logger.Printf("[JQ_EXTRACTION] Extracting variables using jq selectors")
 					vars, err := s.extractVariables(data, job.Secondary.JQSelectors)
 					if err != nil {
@@ -239,9 +239,27 @@ func (s *Scheduler) processTemplate(templateStr string, variables map[string]int
 	result := templateStr
 	for varName, value := range variables {
 		placeholder := fmt.Sprintf("{{%s}}", varName)
-		valueStr := fmt.Sprintf("%v", value)
-		result = strings.ReplaceAll(result, placeholder, valueStr)
-		s.logger.Printf("[TEMPLATE_REPLACE] Replaced '%s' with '%s'", placeholder, valueStr)
+		// For strings, escape newlines and special chars for JSON
+		if str, ok := value.(string); ok {
+			// Escape newlines and other special characters for JSON
+			escapedStr := strings.ReplaceAll(str, "\n", "\\n")
+			escapedStr = strings.ReplaceAll(escapedStr, "\r", "\\r")
+			escapedStr = strings.ReplaceAll(escapedStr, "\t", "\\t")
+			escapedStr = strings.ReplaceAll(escapedStr, "\"", "\\\"")
+			result = strings.ReplaceAll(result, placeholder, escapedStr)
+			s.logger.Printf("[TEMPLATE_REPLACE] Replaced '%s' with escaped string", placeholder)
+		} else {
+			// For non-string values, marshal to JSON
+			valueBytes, err := json.Marshal(value)
+			if err != nil {
+				s.logger.Printf("[TEMPLATE_ERROR] Failed to marshal value for variable '%s': %v", varName, err)
+				valueStr := fmt.Sprintf("%v", value)
+				result = strings.ReplaceAll(result, placeholder, valueStr)
+			} else {
+				result = strings.ReplaceAll(result, placeholder, string(valueBytes))
+			}
+			s.logger.Printf("[TEMPLATE_REPLACE] Replaced '%s' with '%s'", placeholder, string(valueBytes))
+		}
 	}
 
 	return result, nil
@@ -290,7 +308,11 @@ func (s *Scheduler) executeWebhook(ctx context.Context, webhook config.WebhookCo
 		s.logger.Printf("[WEBHOOK_ERROR] Failed to execute webhook: %v", err)
 		return "", fmt.Errorf("failed to execute webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			s.logger.Printf("[WEBHOOK_ERROR] Failed to close response body: %v", err)
+		}
+	}()
 
 	s.logger.Printf("[WEBHOOK_RESPONSE] Status: %d %s", resp.StatusCode, resp.Status)
 

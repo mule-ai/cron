@@ -60,7 +60,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	jobs := s.config.GetAllJobs()
-	s.templates.ExecuteTemplate(w, "index.html", jobs)
+	if err := s.templates.ExecuteTemplate(w, "index.html", jobs); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +71,10 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		jobs := s.config.GetAllJobs()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(jobs)
+		if err := json.NewEncoder(w).Encode(jobs); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		
 	case http.MethodPost:
 		var job config.CronJob
@@ -93,8 +99,11 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
-		
+		if err := json.NewEncoder(w).Encode(job); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -102,7 +111,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	jobID := path.Base(r.URL.Path)
-	
+
 	switch r.Method {
 	case http.MethodGet:
 		job, err := s.config.GetJob(jobID)
@@ -110,9 +119,12 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
+		if err := json.NewEncoder(w).Encode(job); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		
 	case http.MethodPut:
 		var job config.CronJob
@@ -142,8 +154,11 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
-		
+		if err := json.NewEncoder(w).Encode(job); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	case http.MethodDelete:
 		if err := s.config.DeleteJob(jobID); err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -155,8 +170,11 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
-		s.scheduler.RemoveJob(jobID)
-		
+		if err := s.scheduler.RemoveJob(jobID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 		
 	default:
