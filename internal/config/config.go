@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,6 +17,14 @@ type WebhookConfig struct {
 	JQSelectors          map[string]string `yaml:"jq_selectors,omitempty" json:"jq_selectors,omitempty"`
 	BodyTemplate         string            `yaml:"body_template,omitempty" json:"body_template,omitempty"`
 	OnlyIfVarsNonEmpty   bool              `yaml:"only_if_vars_non_empty,omitempty" json:"only_if_vars_non_empty,omitempty"`
+	Timeout              int               `yaml:"timeout,omitempty" json:"timeout,omitempty"` // Timeout in seconds, 0 means use default
+	Enabled              bool              `yaml:"enabled" json:"enabled"`                     // Enable/disable webhook
+}
+
+type Reminder struct {
+	ID          string    `yaml:"id" json:"id"`
+	Text        string    `yaml:"text" json:"text"`
+	Datetime    time.Time `yaml:"datetime" json:"datetime"`
 }
 
 type CronJob struct {
@@ -27,6 +36,7 @@ type CronJob struct {
 	Secondary   *WebhookConfig `yaml:"secondary,omitempty" json:"secondary,omitempty"`
 	SaveOutput  bool           `yaml:"save_output,omitempty" json:"save_output,omitempty"`
 	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Reminders   []Reminder     `yaml:"reminders,omitempty" json:"reminders,omitempty"`
 }
 
 type Config struct {
@@ -105,6 +115,39 @@ func (c *Config) DeleteJob(id string) error {
 	}
 
 	return fmt.Errorf("job with id %s not found", id)
+}
+
+// DeleteReminder removes a reminder from a job by job ID and reminder ID
+func (c *Config) DeleteReminder(jobID, reminderID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, job := range c.Jobs {
+		if job.ID == jobID {
+			// Find and remove the reminder
+			updatedReminders := []Reminder{}
+			reminderFound := false
+
+			for _, reminder := range job.Reminders {
+				if reminder.ID == reminderID {
+					reminderFound = true
+					continue // Skip this reminder (effectively removing it)
+				}
+				updatedReminders = append(updatedReminders, reminder)
+			}
+
+			if !reminderFound {
+				return fmt.Errorf("reminder with id %s not found in job %s", reminderID, jobID)
+			}
+
+			// Update the job with the new reminders list
+			job.Reminders = updatedReminders
+			c.Jobs[i] = job
+			return nil
+		}
+	}
+
+	return fmt.Errorf("job with id %s not found", jobID)
 }
 
 func (c *Config) GetJob(id string) (*CronJob, error) {

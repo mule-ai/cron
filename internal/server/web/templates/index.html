@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cron Microservice</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
@@ -28,6 +29,7 @@
                             <h3>{{.Name}}</h3>
                             <div class="job-actions">
                                 <button class="btn btn-small btn-secondary" onclick="testJob('{{.ID}}')">Test Now</button>
+                                <button class="btn btn-small" onclick="addReminder('{{.ID}}')">Add Reminder</button>
                                 <button class="btn btn-small" onclick="editJob('{{.ID}}')">Edit</button>
                                 <button class="btn btn-small btn-danger" onclick="deleteJob('{{.ID}}')">Delete</button>
                             </div>
@@ -39,6 +41,21 @@
                             <p><strong>Primary Webhook:</strong> {{.Primary.Method}} {{.Primary.URL}}</p>
                             {{if .Secondary}}<p><strong>Secondary Webhook:</strong> {{.Secondary.Method}} {{.Secondary.URL}}</p>{{end}}
                             {{if .Description}}<p><strong>Description:</strong> {{.Description}}</p>{{end}}
+                            {{if .Reminders}}
+                            <div class="reminders-section">
+                                <h4>Reminders</h4>
+                                {{$jobID := .ID}}
+                                {{range .Reminders}}
+                                <div class="reminder-item" id="reminder-{{.ID}}">
+                                    <p><strong><span class="reminder-datetime" data-utc="{{.Datetime.Format "2006-01-02T15:04:05Z"}}">{{.Datetime.Format "2006-01-02 15:04:05"}}</span></strong>: {{.Text}}</p>
+                                    <div class="reminder-actions">
+                                        <button class="btn btn-small" onclick="editReminder('{{.ID}}', '{{$jobID}}', '{{.Text}}', '{{.Datetime.Format "2006-01-02T15:04:05"}}')">Edit</button>
+                                        <button class="btn btn-small btn-danger" onclick="deleteReminder('{{.ID}}', '{{$jobID}}')">Delete</button>
+                                    </div>
+                                </div>
+                                {{end}}
+                            </div>
+                            {{end}}
                         </div>
                     </div>
                     {{else}}
@@ -112,7 +129,24 @@
                     <textarea id="primary-body" rows="4"></textarea>
                 </div>
 
+                <div class="form-group">
+                    <label for="primary-timeout">Timeout (seconds) <span class="help-icon" title="Maximum time to wait for webhook response (0 for default)">ℹ️</span></label>
+                    <input type="number" id="primary-timeout" min="0" value="0">
+                    <div class="help-box">
+                        <strong>Timeout Setting:</strong><br>
+                        Set to 0 to use the default timeout (30 seconds)<br>
+                        For AI generation calls, consider setting higher timeouts (e.g., 120 seconds)
+                    </div>
+                </div>
+
                 <h3>Secondary Webhook (Optional)</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="secondary-enabled" checked>
+                        Enable Secondary Webhook
+                    </label>
+                </div>
+
                 <div class="form-group">
                     <label for="secondary-url">URL</label>
                     <input type="url" id="secondary-url">
@@ -187,9 +221,79 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="secondary-timeout">Timeout (seconds) <span class="help-icon" title="Maximum time to wait for webhook response (0 for default)">ℹ️</span></label>
+                    <input type="number" id="secondary-timeout" min="0" value="0">
+                    <div class="help-box">
+                        <strong>Timeout Setting:</strong><br>
+                        Set to 0 to use the default timeout (30 seconds)<br>
+                        For AI generation calls, consider setting higher timeouts (e.g., 120 seconds)
+                    </div>
+                </div>
+
                 <div class="modal-actions">
                     <button type="button" class="btn" onclick="closeModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Reminder Modal -->
+    <div id="reminder-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Reminder</h2>
+                <button class="close" onclick="closeReminderModal()">&times;</button>
+            </div>
+
+            <form id="reminder-form" onsubmit="saveReminder(event)">
+                <input type="hidden" id="reminder-job-id">
+                <input type="hidden" id="reminder-id">
+
+                <div class="form-group">
+                    <label for="reminder-text">Reminder Text *</label>
+                    <textarea id="reminder-text" rows="3" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="reminder-datetime">Date and Time *</label>
+                    <input type="datetime-local" id="reminder-datetime" required>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeReminderModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Reminder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Reminder Modal -->
+    <div id="edit-reminder-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Reminder</h2>
+                <button class="close" onclick="closeEditReminderModal()">&times;</button>
+            </div>
+
+            <form id="edit-reminder-form" onsubmit="updateReminder(event)">
+                <input type="hidden" id="edit-reminder-job-id">
+                <input type="hidden" id="edit-reminder-id">
+
+                <div class="form-group">
+                    <label for="edit-reminder-text">Reminder Text *</label>
+                    <textarea id="edit-reminder-text" rows="3" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-reminder-datetime">Date and Time *</label>
+                    <input type="datetime-local" id="edit-reminder-datetime" required>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeEditReminderModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Reminder</button>
                 </div>
             </form>
         </div>

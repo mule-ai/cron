@@ -55,4 +55,4 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: cron-service
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}

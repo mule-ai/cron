@@ -1,0 +1,24 @@
+jobs:
+  - id: test-job
+    name: Test Job
+    schedule: '* * * * *'
+    enabled: true
+    primary:
+      url: https://httpbin.org/get
+      method: GET
+    secondary:
+      url: https://httpbin.org/post
+      method: POST
+      enabled: true
+      jq_selectors:
+        message: ".url"
+      body_template: |
+        {
+          "reminder": "{{REMINDER}}",
+          "message": "{{message}}",
+          "source": "cron-reminder"
+        }
+    reminders:
+      - id: test-reminder
+        text: "This is a test reminder"
+        datetime: 2025-12-08T19:30:00Z
