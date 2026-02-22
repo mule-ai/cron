@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reminder Details</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/theme.js"></script>
+    <script>
+        // Set theme immediately to prevent flash of wrong theme
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <div class="container">
+        <header>
+            <div class="header-navigation">
+                <a href="/" class="btn btn-secondary" aria-label="Back to reminder list">← Back to List</a>
+                <button id="theme-toggle" class="btn btn-icon btn-ghost" onclick="toggleTheme()" aria-label="Toggle dark/light theme">🌙</button>
+            </div>
+            <h1>Reminder Details</h1>
+        </header>
+
+        <main id="main-content">
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading reminder...</p>
+            </div>
+
+            <div id="reminder-detail" style="display: none;">
+                <!-- Detail View -->
+                <section class="detail-section" id="detail-view">
+                    <div class="section-header">
+                        <h2>📋 View Reminder</h2>
+                    </div>
+
+                    <div class="reminder-detail">
+                        <div class="detail-row">
+                            <label>Message</label>
+                            <div id="detail-message" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Date & Time</label>
+                            <div id="detail-datetime" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Status</label>
+                            <div id="detail-status" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Follow-up Duration</label>
+                            <div id="detail-follow-up" class="detail-value">—</div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Max Follow-ups</label>
+                            <div id="detail-max-follow-ups" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Follow-up Count</label>
+                            <div id="detail-follow-up-count" class="detail-value">0</div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Created</label>
+                            <div id="detail-created" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-row">
+                            <label>Last Updated</label>
+                            <div id="detail-updated" class="detail-value"></div>
+                        </div>
+
+                        <div class="detail-actions">
+                            <button class="btn btn-primary" onclick="switchToEdit()" aria-label="Edit this reminder">✏️ Edit Reminder</button>
+                            <button id="fire-btn" class="btn btn-warning" onclick="fireReminder()" aria-label="Manually fire this reminder now">🔥 Fire Reminder</button>
+                            <button class="btn btn-danger" onclick="deleteReminder(this)" aria-label="Delete this reminder">🗑️ Delete Reminder</button>
+                            <a href="/" class="btn btn-secondary" aria-label="Back to reminder list">← Back to List</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Edit View -->
+                <section class="detail-section" id="edit-view" style="display: none;">
+                    <div class="section-header">
+                        <h2>✏️ Edit Reminder</h2>
+                    </div>
+
+                    <form id="edit-form" onsubmit="updateReminder(event)">
+                        <div class="form-group">
+                            <label for="edit-message" class="form-label">Message *</label>
+                            <textarea id="edit-message" class="form-input form-textarea" rows="4" required placeholder="Enter your reminder message..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-datetime" class="form-label">Date & Time *</label>
+                            <input type="datetime-local" id="edit-datetime" class="form-input" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-follow-up" class="form-label">Follow-up Duration</label>
+                            <input type="text" id="edit-follow-up" class="form-input" placeholder="e.g., P1D (daily)">
+                            <small>Leave empty to disable follow-ups. Examples: P1D (daily), PT1H (hourly), P1W (weekly)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-max-follow-ups" class="form-label">Max Follow-ups</label>
+                            <input type="number" id="edit-max-follow-ups" class="form-input" value="-1" min="-1">
+                            <small>-1 for infinite follow-ups, 0 to disable, or a positive number for a specific count</small>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="switchToDetail()">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="update-btn">💾 Save Changes</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <div id="error" style="display: none;" class="error"></div>
+        </main>
+    </div>
+
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="/static/js/theme.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/reminder-detail.js"></script>
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            loadReminderDetail();
+        });
+    </script>
+</body>
+</html>

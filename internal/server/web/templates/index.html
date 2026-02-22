@@ -3,302 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cron Microservice</title>
+    <title>Reminders</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="/static/js/theme.js"></script>
+    <script>
+        // Set theme immediately to prevent flash of wrong theme
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
 </head>
 <body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div class="container">
-        <header>
-            <h1>Cron Microservice</h1>
-            <button id="theme-toggle" onclick="toggleTheme()">🌙</button>
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-brand">
+                    <h1 class="header-title">🔔 Reminders</h1>
+                </div>
+                <div class="header-actions">
+                    <a href="/calendar" class="btn btn-secondary btn-sm">📅 Calendar</a>
+                    <button id="theme-toggle" class="btn btn-ghost btn-icon" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
+                </div>
+            </div>
         </header>
 
-        <main>
-            <section class="job-list">
+        <main id="main-content">
+            <!-- Quick Create Section -->
+            <section class="quick-create-section">
                 <div class="section-header">
-                    <h2>Cron Jobs</h2>
-                    <button class="btn btn-primary" onclick="showAddJobModal()">Add Job</button>
+                    <h2>Create Reminder</h2>
                 </div>
                 
-                <div id="jobs-container">
-                    {{range .}}
-                    <div class="job-card" id="job-{{.ID}}">
-                        <div class="job-header">
-                            <h3>{{.Name}}</h3>
-                            <div class="job-actions">
-                                <button class="btn btn-small btn-secondary" onclick="testJob('{{.ID}}')">Test Now</button>
-                                <button class="btn btn-small" onclick="addReminder('{{.ID}}')">Add Reminder</button>
-                                <button class="btn btn-small" onclick="editJob('{{.ID}}')">Edit</button>
-                                <button class="btn btn-small btn-danger" onclick="deleteJob('{{.ID}}')">Delete</button>
-                            </div>
+                <div class="quick-create-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quick-message" class="form-label">Message *</label>
+                            <input type="text" id="quick-message" class="form-input" placeholder="Enter reminder message" required>
                         </div>
                         
-                        <div class="job-details">
-                            <p><strong>Schedule:</strong> <code>{{.Schedule}}</code></p>
-                            <p><strong>Status:</strong> <span class="status {{if .Enabled}}enabled{{else}}disabled{{end}}">{{if .Enabled}}Enabled{{else}}Disabled{{end}}</span></p>
-                            <p><strong>Primary Webhook:</strong> {{.Primary.Method}} {{.Primary.URL}}</p>
-                            {{if .Secondary}}<p><strong>Secondary Webhook:</strong> {{.Secondary.Method}} {{.Secondary.URL}}</p>{{end}}
-                            {{if .Description}}<p><strong>Description:</strong> {{.Description}}</p>{{end}}
-                            {{if .Reminders}}
-                            <div class="reminders-section">
-                                <h4>Reminders</h4>
-                                {{$jobID := .ID}}
-                                {{range .Reminders}}
-                                <div class="reminder-item" id="reminder-{{.ID}}">
-                                    <p><strong><span class="reminder-datetime" data-utc="{{.Datetime.Format "2006-01-02T15:04:05Z"}}">{{.Datetime.Format "2006-01-02 15:04:05"}}</span></strong>: {{.Text}}</p>
-                                    <div class="reminder-actions">
-                                        <button class="btn btn-small" onclick="editReminder('{{.ID}}', '{{$jobID}}', '{{.Text}}', '{{.Datetime.Format "2006-01-02T15:04:05"}}')">Edit</button>
-                                        <button class="btn btn-small btn-danger" onclick="deleteReminder('{{.ID}}', '{{$jobID}}')">Delete</button>
-                                    </div>
-                                </div>
-                                {{end}}
-                            </div>
-                            {{end}}
+                        <div class="form-group">
+                            <label for="quick-datetime" class="form-label">Date & Time *</label>
+                            <input type="datetime-local" id="quick-datetime" class="form-input" required>
                         </div>
                     </div>
-                    {{else}}
-                    <p class="no-jobs">No cron jobs configured. Add your first job to get started!</p>
-                    {{end}}
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quick-follow-up" class="form-label">Follow-up Duration</label>
+                            <input type="text" id="quick-follow-up" class="form-input" placeholder="e.g., P1D (daily)">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="quick-max-follow-ups" class="form-label">Max Follow-ups</label>
+                            <input type="number" id="quick-max-follow-ups" class="form-input" value="-1" min="-1">
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button id="quick-create-btn" class="btn btn-primary btn-lg w-full" onclick="createReminder()">
+                            <span>➕</span> Create Reminder
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Upcoming Reminders Section -->
+            <section class="reminders-section">
+                <div class="section-header">
+                    <h2>Upcoming Reminders</h2>
+                    <span class="reminder-count" id="upcoming-count">(0)</span>
+                </div>
+                
+                <div id="upcoming-reminders" class="reminders-list">
+                    <div class="empty-state">
+                        <p class="empty-state-text">No upcoming reminders. Create one to get started!</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Past Reminders Section -->
+            <section class="reminders-section past-section">
+                <div class="section-header">
+                    <h2>Past Reminders</h2>
+                    <span class="reminder-count" id="past-count">(0)</span>
+                </div>
+                
+                <div id="past-reminders" class="reminders-list">
+                    <div class="empty-state">
+                        <p class="empty-state-text">No past reminders yet.</p>
+                    </div>
                 </div>
             </section>
         </main>
-    </div>
-
-    <!-- Add/Edit Job Modal -->
-    <div id="job-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">Add Cron Job</h2>
-                <button class="close" onclick="closeModal()">&times;</button>
-            </div>
-            
-            <form id="job-form" onsubmit="saveJob(event)">
-                <input type="hidden" id="job-id">
-                
-                <div class="form-group">
-                    <label for="job-name">Job Name *</label>
-                    <input type="text" id="job-name" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="job-schedule">Schedule (cron format) *</label>
-                    <input type="text" id="job-schedule" placeholder="* * * * *" required>
-                    <small>Minute Hour Day Month Weekday</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="job-description">Description</label>
-                    <textarea id="job-description" rows="2"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="job-enabled" checked>
-                        Enabled
-                    </label>
-                </div>
-
-                <h3>Primary Webhook</h3>
-                <div class="form-group">
-                    <label for="primary-url">URL *</label>
-                    <input type="url" id="primary-url" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="primary-bearer-token">Bearer Token</label>
-                    <input type="password" id="primary-bearer-token" placeholder="Optional: Bearer token for authentication">
-                </div>
-
-                <div class="form-group">
-                    <label for="primary-method">Method *</label>
-                    <select id="primary-method" required>
-                        <option value="GET">GET</option>
-                        <option value="POST">POST</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="primary-headers">Headers (JSON)</label>
-                    <textarea id="primary-headers" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="primary-body">Body</label>
-                    <textarea id="primary-body" rows="4"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="primary-timeout">Timeout (seconds) <span class="help-icon" title="Maximum time to wait for webhook response (0 for default)">ℹ️</span></label>
-                    <input type="number" id="primary-timeout" min="0" value="0">
-                    <div class="help-box">
-                        <strong>Timeout Setting:</strong><br>
-                        Set to 0 to use the default timeout (30 seconds)<br>
-                        For AI generation calls, consider setting higher timeouts (e.g., 120 seconds)
-                    </div>
-                </div>
-
-                <h3>Secondary Webhook (Optional)</h3>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="secondary-enabled" checked>
-                        Enable Secondary Webhook
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-url">URL</label>
-                    <input type="url" id="secondary-url">
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-bearer-token">Bearer Token</label>
-                    <input type="password" id="secondary-bearer-token" placeholder="Optional: Bearer token for authentication">
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-method">Method</label>
-                    <select id="secondary-method">
-                        <option value="GET">GET</option>
-                        <option value="POST">POST</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-headers">Headers (JSON)</label>
-                    <textarea id="secondary-headers" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-jq-selectors">JQ Selectors (JSON) <span class="help-icon" title="Extract data from primary webhook response using jq selectors">ℹ️</span></label>
-                    <textarea id="secondary-jq-selectors" rows="4" placeholder='{
-  "userId": ".user.id",
-  "status": ".status",
-  "name": ".data.name"
-}'></textarea>
-                    <div class="help-box">
-                        <strong>Examples:</strong><br>
-                        • <code>{"id": ".id"}</code> - extracts top-level id field<br>
-                        • <code>{"userId": ".user.id"}</code> - extracts nested user.id<br>
-                        • <code>{"firstItem": ".items[0].name"}</code> - extracts from array<br>
-                        • <code>{"active": ".users[] | select(.active) | .name"}</code> - filters array<br>
-                        Use extracted variables as <code>{{"{{"}}variableName{{"}}"}}</code> in the template below.
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-body-template">Body Template <span class="help-icon" title="Template for secondary webhook body using extracted variables">ℹ️</span></label>
-                    <textarea id="secondary-body-template" rows="4" placeholder='{
-  "userId": "{{"{{"}}userId{{"}}"}}",
-  "status": "{{"{{"}}status{{"}}"}}",
-  "processed": true,
-  "timestamp": "2025-11-25"
-}'></textarea>
-                    <div class="help-box">
-                        <strong>Template Examples:</strong><br>
-                        • <code>{"id": "{{"{{"}}userId{{"}}"}}", "status": "{{"{{"}}status{{"}}"}}"}</code> - uses extracted variables<br>
-                        • <code>{"data": {{"{{"}}original{{"}}"}}, "processed": true}</code> - wraps original response<br>
-                        Leave empty to send raw primary webhook response unchanged.
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="save-output">
-                        Save output from primary webhook and send to secondary
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="only-if-vars-non-empty">
-                        Only run second webhook if variables resolve to non-empty strings
-                    </label>
-                    <div class="help-box">
-                        <strong>Conditional Execution:</strong><br>
-                        When checked, the secondary webhook will only execute if all extracted jq variables contain non-empty values. Useful for ensuring required data is present before proceeding.
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="secondary-timeout">Timeout (seconds) <span class="help-icon" title="Maximum time to wait for webhook response (0 for default)">ℹ️</span></label>
-                    <input type="number" id="secondary-timeout" min="0" value="0">
-                    <div class="help-box">
-                        <strong>Timeout Setting:</strong><br>
-                        Set to 0 to use the default timeout (30 seconds)<br>
-                        For AI generation calls, consider setting higher timeouts (e.g., 120 seconds)
-                    </div>
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="closeModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Job</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Add Reminder Modal -->
-    <div id="reminder-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Add Reminder</h2>
-                <button class="close" onclick="closeReminderModal()">&times;</button>
-            </div>
-
-            <form id="reminder-form" onsubmit="saveReminder(event)">
-                <input type="hidden" id="reminder-job-id">
-                <input type="hidden" id="reminder-id">
-
-                <div class="form-group">
-                    <label for="reminder-text">Reminder Text *</label>
-                    <textarea id="reminder-text" rows="3" required></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="reminder-datetime">Date and Time *</label>
-                    <input type="datetime-local" id="reminder-datetime" required>
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="closeReminderModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Reminder</button>
-                </div>
-            </form>
-        </div>
+        
+        <!-- Floating Action Button (Mobile) -->
+        <button id="mobile-fab" class="fab" onclick="scrollToQuickCreate()" aria-label="Create reminder">
+            <span>➕</span>
+        </button>
     </div>
 
     <!-- Edit Reminder Modal -->
-    <div id="edit-reminder-modal" class="modal">
+    <div id="edit-modal" class="modal" role="dialog" aria-labelledby="edit-modal-title" aria-modal="true">
+        <div class="modal-overlay" onclick="closeEditModal()"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Edit Reminder</h2>
-                <button class="close" onclick="closeEditReminderModal()">&times;</button>
+                <h2 id="edit-modal-title">Edit Reminder</h2>
+                <button class="modal-close" onclick="closeEditModal()" aria-label="Close modal">&times;</button>
             </div>
 
-            <form id="edit-reminder-form" onsubmit="updateReminder(event)">
-                <input type="hidden" id="edit-reminder-job-id">
-                <input type="hidden" id="edit-reminder-id">
+            <form id="edit-form" onsubmit="updateReminder(event)">
+                <input type="hidden" id="edit-id">
 
                 <div class="form-group">
-                    <label for="edit-reminder-text">Reminder Text *</label>
-                    <textarea id="edit-reminder-text" rows="3" required></textarea>
+                    <label for="edit-message" class="form-label">Message *</label>
+                    <textarea id="edit-message" class="form-input form-textarea" rows="3" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="edit-reminder-datetime">Date and Time *</label>
-                    <input type="datetime-local" id="edit-reminder-datetime" required>
+                    <label for="edit-datetime" class="form-label">Date & Time *</label>
+                    <input type="datetime-local" id="edit-datetime" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-follow-up" class="form-label">Follow-up Duration</label>
+                    <input type="text" id="edit-follow-up" class="form-input" placeholder="e.g., P1D (daily)">
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-max-follow-ups" class="form-label">Max Follow-ups</label>
+                    <input type="number" id="edit-max-follow-ups" class="form-input" value="-1" min="-1">
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn" onclick="closeEditReminderModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Reminder</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button id="update-btn" type="submit" class="btn btn-primary">Update Reminder</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
     <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            initFloatingLabels();
+            loadReminders();
+            // Set default datetime to 1 hour from now (always in the future)
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('quick-datetime').value = now.toISOString().slice(0, 16);
+            
+            // Check for editId parameter from calendar redirect
+            const urlParams = new URLSearchParams(window.location.search);
+            const editId = urlParams.get('editId');
+            if (editId) {
+                // Open edit modal for this reminder
+                setTimeout(() => {
+                    openEditModal(editId);
+                }, 500);
+                // Remove the editId parameter from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+    </script>
 </body>
 </html>
